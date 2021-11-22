@@ -19,6 +19,7 @@ from konlpy.tag import Mecab
 from pykospacing import Spacing
 
 
+
 def lib_fn_remove_special(fileSource):
     bufSource = fileSource
     # ------------------------------------------------------------
@@ -77,6 +78,23 @@ print(len(csv_f.columns))
 # print(csv_f['Column2'][2])
 
 
+min_count = 5   # 단어의 최소 출현 빈도수 (그래프 생성 시)
+max_length = 10 # 단어의 최대 길이
+wordrank_extractor = KRWordRank(min_count=min_count, max_length=max_length)
+
+beta = 0.85    # PageRank의 decaying factor beta
+max_iter = 10
+texts = [csv_f['Column2'][5]]
+
+
+texts = [normalize(text, english=False, number=False) for text in texts]
+keywords, rank, graph = wordrank_extractor.extract(texts, beta, max_iter)
+temp = ''
+for word, r in sorted(keywords.items(), key=lambda x:x[1], reverse=True)[:30]:
+    temp =  temp + ' ' + word
+    print('%8s:\t%.4f' % (word, r))
+
+"""
 for k in range(0, 10):
     temp_pd = []
     doc = csv_f['Column1'][k] + ' ' + csv_f['Column2'][k]
@@ -85,21 +103,6 @@ for k in range(0, 10):
     spacing = Spacing()
     doc = spacing(doc)
     temp_pd.append([doc])
-    """
-    min_count = 5   # 단어의 최소 출현 빈도수 (그래프 생성 시)
-    max_length = 10 # 단어의 최대 길이
-    wordrank_extractor = KRWordRank(min_count=min_count, max_length=max_length)
-
-    beta = 0.85    # PageRank의 decaying factor beta
-    max_iter = 10
-    texts = [csv_f['Column2'][0]]
-    texts = [normalize(text, english=False, number=False) for text in texts]
-    keywords, rank, graph = wordrank_extractor.extract(texts, beta, max_iter)
-    temp = ''
-    for word, r in sorted(keywords.items(), key=lambda x:x[1], reverse=True)[:30]:
-        temp =  temp + ' ' + word
-        print('%8s:\t%.4f' % (word, r))
-    """
 
     objArrKeywords = kw_model.extract_keywords(doc, keyphrase_ngram_range=(1, 3), top_n=20)
 
@@ -133,6 +136,10 @@ for k in range(0, 10):
         temp_pd.append(v)
     csv_w[str(k)] = pd.Series(temp_pd)
     # csv_w.to_csv("keyword_one.csv", mode='a', encoding='utf-8-sig')
-    # csv_w.to_csv("keyword_two.csv", mode='a', encoding='utf-8-sig')
+    # csv_w.to_csv("keyword_two.csv", mode='a', en
+    # 
+    # 
+    # coding='utf-8-sig')
     # print(csv_w)
 csv_w.to_csv("keyword_after_mecab.csv", mode='a', encoding='utf-8-sig')
+"""

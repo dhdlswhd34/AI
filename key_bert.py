@@ -1,9 +1,10 @@
 # -*- coding: utf-8 -*-
+from re import S
 import pandas as pd 
 import time
 
 # 키워드 추출
-from keybert import KeyBERT 
+from keybert import KeyBERT
 from collections import Counter
 # KR-WordRank
 from krwordrank.word import KRWordRank
@@ -27,15 +28,15 @@ def lib_fn_remove_special(fileSource):
     bufSource = bufSource.replace("\\", " ")
     bufSource = bufSource.replace("\"", " ")
     bufSource = bufSource.replace('"', '')
-
-    specialChars = "!#$%^&*()?~.,/-_"
+ 
+    specialChars = "!#$%^&*()?~.,/-_○』『☎"
     for specialChr in specialChars:
         bufSource = bufSource.replace(specialChr, ' ')
     bufSource = bufSource.strip()
 
-    # bufSource = bufSource.replace("  ", " ")
+    bufSource = bufSource.replace("  ", " ")
 
-    bufSource = bufSource.replace(" ", "")
+    # bufSource = bufSource.replace(" ", "")
     
     return bufSource
 
@@ -59,93 +60,120 @@ def lib_fn_remove_digits(fileSource):
 
     return bufSource
 
-
 if __name__ == '__main__':
     USE_MECAB = 1
     USE_KEYBERT = 1
     USE_KRWR = 0
-    USE_Spacing = 1
+    USE_Spacing = 0
     keylen = 2
 
     fileName = "reranking_10000_re.csv"
-    kw_model = KeyBERT(model='paraphrase-multilingual-mpnet-base-v2')
+
+    #  keybert 사전 학습 모델
+    # ------------------------------------------------------------
+    # distiluse-base-multilingual-cased-v1 : 다국어 범용 문장 인코더 의 다국어 지식 증류 버전 . 15개 언어 지원: 아랍어, 중국어, 네덜란드어, 영어, 프랑스어, 독일어, 이탈리아어, 한국어, 폴란드어, 포르투갈어, 러시아어, 스페인어, 터키어.
+    # distiluse-base-multilingual-cased-v2 : 다국어 범용 문장 인코더 의 다국어 지식 증류 버전 . 이 버전은 50개 이상의 언어를 지원하지만 v1 모델보다 성능이 약간 떨어집니다.
+    # paraphrase-multilingual-MiniLM-L12-v2 - paraphrase-MiniLM-L12-v2 의 다국어 버전으로 , 50개 이상의 언어에 대한 병렬 데이터로 훈련되었습니다.
+    # paraphrase-multilingual-mpnet-base-v2 - paraphrase-mpnet-base-v2 의 다국어 버전으로 , 50개 이상의 언어에 대한 병렬 데이터로 훈련되었습니다.
+    # ------------------------------------------------------------
+    kw_model = KeyBERT(model='distiluse-base-multilingual-cased-v1')
+    # kw_model = KeyBERT(model='distiluse-base-multilingual-cased-v2')
+    # kw_model = KeyBERT(model='paraphrase-multilingual-MiniLM-L12-v2')
+    # kw_model = KeyBERT(model='paraphrase-multilingual-mpnet-base-v2')
+
     csv_f = pd.read_csv(fileName, encoding='UTF-8')
     csv_w = pd.DataFrame()
     # print(len(csv_f.index))
     # print(len(csv_f.columns))
 
-    for k in range(0, 10):
-        temp = []
-        start = time.time()
-        doc = str(csv_f['Column1'][k]) + ' ' + str(csv_f['Column2'][k])
+    temp = []
+    
+    
+    doc = str(csv_f['Column1'][0]) + ' ' + str(csv_f['Column2'][0])
 
-        doc = lib_fn_remove_digits(doc)
-        doc = lib_fn_remove_special(doc)
+    doc = lib_fn_remove_digits(doc)
+    doc = lib_fn_remove_special(doc)
+    print(doc)
+
+    if USE_Spacing == 1:
+        spacing = Spacing()
+        doc = spacing(doc)
         # print(doc)
-        if USE_Spacing == 1:
-            spacing = Spacing()
-            doc = spacing(doc)
-            # print(doc)
 
-        if USE_MECAB == 1:
-            mecab = Mecab(dicpath=r"C:\mecab\mecab-ko-dic")
-            #objArrOkts = mecab.morphs(srcSpacing)    # 형태소
+    if USE_MECAB == 1:
+        mecab = Mecab(dicpath=r"C:\mecab\mecab-ko-dic")
+        
+        # objArrOkts = mecab.morphs9(텍스트)    # 형태소
+        # objArrOkts = mecab.nouns(텍스트)    # 명사만 추출
+        # # objArrOkts = mecab.morphs(doc)    # 어절만 추출
 
-            objArrOkts = mecab.nouns(doc)    # 명사만 추출
-            #objArrOkts = mecab.phrases(srcSpacing)    # 어절만 추출
+        objArrOkts = mecab.pos(doc)
 
-            srcSpacing = ' '.join([i for i in objArrOkts])
-            #print ('Mecab.001.objArrOkts : %s' %(bufSource))
-            
-            # 한글자 명사는 제외 처리
-            for i, v in enumerate(objArrOkts):
+        L = 0
+        while(L < 2):
+            for i, (v, t) in enumerate(objArrOkts):
                 if len(v) < 2:
                     objArrOkts.pop(i)
+                    L = len(v)
+                    break
+                else:
+                    L = len(v)
+                    
+        print(objArrOkts)
 
-            # 명사 빈도 순으로 추출
-            count = Counter(objArrOkts)
-            nounlist = count.most_common(20)
-            for v in nounlist:
-                print('Mecab.002.nouns : ', v)
+        srcSpacing = ' '.join([i for (i, j) in objArrOkts if ('NN' in j or 'XR' in j or 'VA' in j or 'VV' in j)])
 
-        if USE_KRWR == 1:
-            min_count = 5   # 단어의 최소 출현 빈도수 (그래프 생성 시)
-            max_length = 10 # 단어의 최대 길이
-            wordrank_extractor = KRWordRank(min_count=min_count, max_length=max_length)
+        # srcSpacing = ' '.join([i for i in objArrOkts])
+        print(srcSpacing)
+        #print ('Mecab.001.objArrOkts : %s' %(bufSource))
+        
+        # 한글자 명사는 제외 처리
+        for i, v in enumerate(objArrOkts):
+            if len(v) < 2:
+                objArrOkts.pop(i)
 
-            beta = 0.85    # PageRank의 decaying factor beta
-            max_iter = 10
-            
-            texts = [doc]
-            texts = [normalize(text, english=False, number=False) for text in texts]
-            keywords, rank, graph = wordrank_extractor.extract(texts, beta, max_iter)
+        # 명사 빈도 순으로 추출
+        count = Counter(objArrOkts)
+        nounlist = count.most_common(20)
+        for v in nounlist:
+            print('Mecab.002.nouns : ', v)
+        
+    if USE_KRWR == 1:
+        min_count = 5   # 단어의 최소 출현 빈도수 (그래프 생성 시)
+        max_length = 10 # 단어의 최대 길이
+        wordrank_extractor = KRWordRank(min_count=min_count, max_length=max_length)
 
-            for word, r in sorted(keywords.items(), key=lambda x:x[1], reverse=True)[:30]:
-                print('%8s:\t%.4f' % (word, r))
+        beta = 0.85    # PageRank의 decaying factor beta
+        max_iter = 10
+        
+        texts = [doc]
+        texts = [normalize(text, english=False, number=False) for text in texts]
+        keywords, rank, graph = wordrank_extractor.extract(texts, beta, max_iter)
 
-        if USE_KEYBERT == 1:
-            # print(doc)
-            # kw_model = KeyBERT()
-            #kw_model = KeyBERT(model='paraphrase-MiniLM-L6-v2')
-            # kw_model = KeyBERT(model='paraphrase-multilingual-mpnet-base-v2')
+        for word, r in sorted(keywords.items(), key=lambda x:x[1], reverse=True)[:30]:
+            print('%8s:\t%.4f' % (word, r))
 
-            # keyphrase_ngram_range=(1, 1) : 한 단어 기준
-            objArrKeywords = kw_model.extract_keywords(srcSpacing, keyphrase_ngram_range=(1, 3), top_n=20)
-            #objArrKeywords = kw_model.extract_keywords(srcSpacing, keyphrase_ngram_range=(1, 2))    # 2개 단어추출
-            #objArrKeywords = kw_model.extract_keywords(srcSpacing, keyphrase_ngram_range=(3, 3))    # 3개 단어추출
-            #objArrKeywords = kw_model.extract_keywords(srcSpacing)    # top_n=5 : 5 개 추출 ( default )
+    if USE_KEYBERT == 1:
+        # kw_model = KeyBERT()
+        # keyphrase_ngram_range=(1, 1) : 한 단어 기준
+        # print(srcSpacing)
+        # objArrKeywords = kw_model.extract_keywords(srcSpacing, keyphrase_ngram_range=(1, 3), top_n=20)
+        # objArrKeywords = kw_model.extract_keywords([doc, keyphrase_ngram_range=(1, 3), top_n=20)
+        objArrKeywords = kw_model.extract_keywords(srcSpacing, keyphrase_ngram_range=(1, 3), top_n=20)
+        # objArrKeywords = kw_model.extract_keywords(srcSpacing, keyphrase_ngram_range=(1, 3), use_mmr=True, diversity=0.5)
+        # objArrKeywords = kw_model.extract_keywords(srcSpacing, keyphrase_ngram_range=(1, 2))    # 2개 단어추출
+        # objArrKeywords = kw_model.extract_keywords(srcSpacing, keyphrase_ngram_range=(3, 3))    # 3개 단어추출
+        # objArrKeywords = kw_model.extract_keywords(srcSpacing)    # top_n=5 : 5 개 추출 ( default )
 
-            #print ('KeyBert.002.objArrKeywords : %s' %(objArrKeywords))
-            # ------------------------------------------------------------
-            # KeyBERT Result
-            # ------------------------------------------------------------
-            temp.append([srcSpacing])
-            for j, (keyword, score) in enumerate(objArrKeywords):
-                print('KeyBert.003 : ', keyword, score)
-                temp.append([keyword, score])
+        # ------------------------------------------------------------
+        # KeyBERT Result
+        # ------------------------------------------------------------
+        # temp.append([srcSpacing])
+        print(objArrKeywords)
+        for (keyword, score) in enumerate(objArrKeywords):
+            print('KeyBert.003 : ', keyword, score)
+            # temp.append([keyword, score])
 
-            temp.append([time.time() - start])
-            csv_w[str(k)] = temp
-    # csv_w.to_csv("keyword_one.csv", mode='a', encoding='utf-8-sig')
-    # csv_w.to_csv("keyword_two.csv", mode='a', encoding='utf-8-sig')
-    csv_w.to_csv("keyword_three.csv", mode='a', encoding='utf-8-sig')
+        # temp.append([time.time() - start])
+        # csv_w['1'] = temp
+        # print(csv_w)
